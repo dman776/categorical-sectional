@@ -162,7 +162,6 @@ This will transition/fade into yellow from the standard category color.
 
 Setting this to `false` will result in the category color fading. The amount the category fades is determined by `night_category_proportion`
 
-
 #### snow_pulse
 
 Set this to `true` if you would like stations that are reporting snow to pulse between a low light and white while using the Precipitation visualizer. This is overriden by the twinkle option.
@@ -173,6 +172,11 @@ Defaults to `false`.
 
 Set this to `true` if you would like stations that are reporting snow to twinkle between a low light and white while using the Precipitation visualizer.
 
+Defaults to `true`.
+
+#### lightning_blink
+
+Set this to `true` if lightning should cause a station to blink yellow. This applies to the Flight Rules visualizer only.
 Defaults to `true`.
 
 #### night_category_proportion

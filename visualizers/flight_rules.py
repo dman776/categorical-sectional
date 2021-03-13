@@ -4,6 +4,7 @@ from data_sources import weather
 from lib import colors as colors_lib
 from lib import safe_logging
 from renderers.debug import Renderer
+
 from visualizers.visualizer import BlinkingVisualizer, rgb_colors
 
 
@@ -159,12 +160,12 @@ class FlightRulesVisualizer(BlinkingVisualizer):
         color_name_by_category = get_color_from_condition(condition)
         color_by_category = rgb_colors[color_name_by_category]
 
-        # if is_blink:
-        #     metar = weather.get_metar(station)
-        #     is_lightning = weather.is_lightning(metar)
+        if is_blink:
+            metar = weather.get_metar(station)
+            is_lightning = weather.is_lightning(metar)
 
-        #     if is_lightning:
-        #         color_by_category = rgb_colors[colors_lib.YELLOW]
+            if is_lightning and configuration.get_lightning_blink():
+                color_by_category = rgb_colors[colors_lib.YELLOW]
 
         if blink and is_blink:
             color_by_category = rgb_colors[colors_lib.OFF]
