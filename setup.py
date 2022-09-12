@@ -3,18 +3,18 @@ from setuptools import setup
 
 installs = [
     'pytest',
-    'Adafruit_WS2801',
+    # 'Adafruit_WS2801',
     'requests',
-    'rpi_ws281x',
-    'adafruit-blinka',
-    'adafruit-circuitpython-neopixel'
+    # 'rpi_ws281x',
+    # 'adafruit-blinka',
+    # 'adafruit-circuitpython-neopixel'
 ]
 
-if not local_debug.is_debug():
-    installs.append('RPi.GPIO')
+#if not local_debug.is_debug():
+#    installs.append('RPi.GPIO')
 
 setup(
-    name='cateorical-sectional',
+    name='categorical-sectional',
     version='2.1',
     python_requires='>=3.7',
     description='VFR weathermap supporting Adafruit WS2801 lights.',

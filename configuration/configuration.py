@@ -48,6 +48,7 @@ DEFAULT_METAR_STATION_INACTIVE_MINUTES = 3 * 60
 
 ON_TIME_KEY = "on_time"
 OFF_TIME_KEY = "off_time"
+CHECKWX_API_KEY = "checkwx_api_key"
 
 __VALID_KEYS__ = [
     LED_MODE_KEY,
@@ -64,7 +65,8 @@ __VALID_KEYS__ = [
     PIXEL_ORDER_KEY,
     METAR_STATION_INACTIVE_MINUTES_KEY,
     ON_TIME_KEY,
-    OFF_TIME_KEY
+    OFF_TIME_KEY,
+    CHECKWX_API_KEY
 ]
 
 __VALID_PIXEL_ORDERS__ = [
@@ -542,6 +544,25 @@ def get_off_time():
             return None
 
         return value
+    except Exception:
+        return None
+
+
+def get_checkwx_api_key():
+    """
+    Get the API key for api.checkwx.com.
+
+
+    Returns:
+        str: The API key string
+    """
+    try:
+        value = CONFIG[CHECKWX_API_KEY]
+
+        if value == "":
+            return None
+        else:
+            return value
     except Exception:
         return None
 

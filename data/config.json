@@ -4,7 +4,7 @@
   "spi_port": 0,
   "spi_device": 0,
   "metar_station_inactive_minutes": 180,
-  "airports_file": "../data/kawo_to_kosh.json",
+  "airports_file": "../data/houston_sectional.json",
   "blink_old_stations": false,
   "night_lights": true,
   "night_populated_yellow": false,
@@ -14,5 +14,6 @@
   "brightness_proportion": 0.6,
   "visualizer": 0,
   "on_time": "",
-  "off_time": ""
+  "off_time": "",
+  "checkwx_api_key": "2b9322790d7741c6a35515cc84"
 }
