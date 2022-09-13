@@ -598,7 +598,7 @@ def get_metars(
         # Fall back to an "INVALID" if everything else failed.
         else:
             try:
-                new_metars = get_metar_reports_from_web([identifier])
+                new_metars = fetch_metars([identifier])
                 new_report = new_metars[identifier]
 
                 safe_log("New WX for {}={}".format(identifier, new_report['raw_text']))
@@ -621,10 +621,10 @@ def get_metars(
 
     return metars
 
-# TODO: convert to https://api.checkwx.com/metar/KDWH,KIAH/decoded?x-api-key=2b9322790d7741c6a35515cc84
-def get_metar_reports_from_web(
+
+def fetch_metars(
     airport_icao_codes: list
-) -> list:
+) -> dict:
     """
     Calls to the web an attempts to gets the METARs for the requested station list.
 
@@ -646,22 +646,22 @@ def get_metar_reports_from_web(
     except requests.exceptions.HTTPError as e:
         print(e)
 
-    data_found = False
+    for airport in resp['data']:
+        icao = airport['icao']
+        metars[icao] = airport
 
-    for a in resp['data']:
-        metars[a['icao']] = a
-
-        __station_last_called__[id] = datetime.utcnow()
+        __station_last_called__[icao] = datetime.utcnow()
 
     return metars
 
 
 def get_metar(
     airport_icao_code: str,
+    metar: dict,
     use_cache: bool = True
 ) -> str:
     """
-    Returns the (RAW) METAR for the given station
+    Returns the METAR for the given station
 
     Arguments:
         airport_icao_code {string} -- The ICAO code for the weather station.
@@ -729,9 +729,10 @@ def get_metar_age(
     """
 
     try:
-        metar_date = metar['observed']
-
+        # ex. 2022-09-12T21:53Z
+        metar_date = datetime.strptime(metar["observed"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc)
         return current_time - metar_date
+
     except Exception as e:
         safe_log_warning("Exception while getting METAR age:{}".format(e))
         return None
@@ -906,17 +907,18 @@ def get_category(
 if __name__ == '__main__':
     print('Starting self-test')
 
-    # airports_to_test = ['KDWH', 'KIAH', 'KMSY', 'KDOESNTEXIST']
-    airports = airports_config.keys()
+    airports = ['KDWH', 'KIAH', 'KMSY', 'KDOESNTEXIST']
+    # airports = airports_config.keys()
 
     starting_date_time = datetime.utcnow()
     utc_offset = starting_date_time - datetime.now()
 
     metars = get_metars(airports)
     print("there are {} metars.".format(len(metars)))
+    print("flight category for KDWH: {}".format(get_category(metars['KDWH'])))
 
-    print(get_category(metars['KDWH']))
-    print(get_metar(metars['KDWH'], use_cache=False))
+    print("metar age for KDWH: {}".format(get_metar_age(metars['KDWH'])))
+    print(get_metar('KDWH', metars, use_cache=False))
 
     # light_times = get_civil_twilight('KDWH', starting_date_time)
     # print('Sunrise start:{0}'.format(light_times[0] - utc_offset))
@@ -926,11 +928,11 @@ if __name__ == '__main__':
     # print('Sunset:{0}'.format(light_times[4] - utc_offset))
     # print('Full dark:{0}'.format(light_times[5] - utc_offset))
 
-    for id in airports:
-        metar = get_metar(id)
-        # age = get_metar_age(metar)
-        flight_category = get_category(metars[id])
-        print('{}: {}'.format(id, flight_category))
+    # for id in airports:
+    #     metar = get_metar(id)
+    #     # age = get_metar_age(metar)
+    #     flight_category = get_category(metars[id])
+    #     print('{}: {}'.format(id, flight_category))
 
     sys.exit()
 
