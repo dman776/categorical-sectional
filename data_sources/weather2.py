@@ -17,7 +17,8 @@ from configuration import configuration
 from lib.colors import clamp
 from lib.safe_logging import safe_log, safe_log_warning
 
-api_key = configuration.get_checkwx_api_key()
+api_service_base = configuration.get_api_service_base()
+api_key = configuration.get_api_key()
 hdr = {"X-API-Key": api_key}
 
 INVALID = 'INVALID'
@@ -50,45 +51,6 @@ DEFAULT_READ_SECONDS = 15
 DEFAULT_METAR_LIFESPAN_MINUTES = 60
 DEFAULT_METAR_INVALIDATE_MINUTES = DEFAULT_METAR_LIFESPAN_MINUTES * 1.5
 
-# TODO: convert to https://api.checkwx.com/station/KDWH,KIAH,KMSY,etc
-# latitude.decimal, longitude.decimal
-def __load_airport_data__(
-    airports
-):
-    """
-    Loads all of the airport and weather station data
-    then places it into a dictionary for easy use.
-
-    Keyword Arguments:
-        airports {list} -- a list of configured airports
-
-    Returns:
-        dictionary -- A map of the airport data keyed by ICAO code.
-    """
-    airport_list = ",".join(airports)
-    req = requests.get("https://api.checkwx.com/station/{}".format(airport_list), headers=hdr)
-    try:
-        req.raise_for_status()
-        resp = json.loads(req.text)
-
-    except requests.exceptions.HTTPError as e:
-        print(e)
-
-    airport_to_location = {}
-
-    for a in resp['data']:
-        airport_to_location[a['icao']] = {
-            "lat": a['latitude']['decimal'],
-            "long": a['longitude']['decimal']
-        }
-
-    return airport_to_location
-
-
-airports_config = configuration.get_airport_configs()
-# airport_list = ",".join(airports.keys())
-__airport_locations__ = __load_airport_data__(airports_config)
-
 
 def __get_utc_datetime__(
     datetime_string: str
@@ -102,8 +64,75 @@ def __get_utc_datetime__(
     Returns:
         datetime -- The parsed date time.
     """
+    if len(datetime_string) == 19:
+        return datetime.strptime(datetime_string, "%Y-%m-%dT%H:%M:%S")
+    elif len(datetime_string) == 8:     # need to calc the date portion
+        current_dt = datetime.utcnow()
+        in_time = datetime.strptime(datetime_string, "%H:%M:%S")
+        new_dt = current_dt + timedelta(hours=in_time.hour)
+        new_dt += timedelta(seconds=in_time.minute)
+        new_dt += timedelta(seconds=in_time.second)
+        return new_dt
+    else:
+        return None
 
-    return datetime.strptime(datetime_string, "%Y-%m-%dT%H:%M:%S+00:00")
+
+
+# fetch from api: lat/lon/sunset/sunrise/etc
+def __fetch_airport_data__(
+    airports: list
+):
+    """
+    Loads all of the station data
+    then places it into a dictionary for easy use. (lat/lon/sunrise/sunset/twilight)
+
+    Keyword Arguments:
+        airports {list} -- a list of configured airport icao codes
+
+    Returns:
+        dictionary -- A map of the airport data keyed by ICAO code.
+    """
+    si = {}     # station info
+
+    # checkwx allows up to 20 requests on a single call
+    for i in range(0, len(airports), 20):
+        partial_list = ",".join(airports[i:i+20])
+        req = requests.get("{}/station/{}/suntimes".format(api_service_base, partial_list), headers=hdr)
+        try:
+            req.raise_for_status()
+            resp = json.loads(req.text)
+        except requests.exceptions.HTTPError as e:
+            print(e)
+
+        for a in resp['data']:
+            # current = __get_utc_datetime__(a['sunrise_sunset']['utc']['current']) # 2022-09-14T00:10:21
+            dawn = __get_utc_datetime__(a['sunrise_sunset']['utc']['dawn'])         # 11:42:00
+            sunrise = __get_utc_datetime__(a['sunrise_sunset']['utc']['sunrise'])   # 12:06:29
+            sunset = __get_utc_datetime__(a['sunrise_sunset']['utc']['sunset'])     # 00:28:29
+            dusk = __get_utc_datetime__(a['sunrise_sunset']['utc']['dusk'])         # 00:52:54
+            sunrise_length = sunrise - dawn
+            sunset_length = dusk - sunset
+            avg_transition_time = timedelta(seconds=(sunrise_length.seconds + sunset_length.seconds) / 2)
+
+            si[a['icao']] = {
+                "long": a['geometry']['coordinates'][0],
+                "lat": a['geometry']['coordinates'][1],
+                "dawn": dawn,
+                "sunrise": sunrise,
+                "sunset": sunset,
+                "dusk": dusk,
+                "full_light_start": sunrise + avg_transition_time,
+                "full_light_end": sunset - avg_transition_time
+            }
+    return si
+
+
+airports_config = configuration.get_airport_configs()
+__station_info__ = __fetch_airport_data__(list(airports_config.keys()))
+
+# print("number of airports in config: {}".format(len(airports_config)))
+# print("number of airports with locations: {}".format(len(__airport_locations__)))
+
 
 
 def __set_cache__(
@@ -169,141 +198,8 @@ def __is_cache_valid__(
     return (False, None)
 
 
-# TODO: not needed if we only get the configured airports from the /station api
-def get_faa_csv_identifier(
-    station_icao_code: str
-) -> str:
-    """
-    Checks to see if the given identifier is in the FAA CSV file.
-    If it is not, then checks to see if it is one of the airports
-    that the weather service requires a "K" prefix, but the CSV
-    file is without it.
-
-    Returns any identifier that is in the CSV file.
-    Returns None if the airport is not in the file.
-
-    Arguments:
-        airport_icao_code {string} -- The full identifier of the airport.
-    """
-
-    if station_icao_code is None:
-        return None
-
-    normalized_icao_code = station_icao_code.upper()
-
-    if normalized_icao_code in __airport_locations__:
-        return normalized_icao_code
-
-    if len(normalized_icao_code) >= 4:
-        normalized_icao_code = normalized_icao_code[-3:]
-
-        if normalized_icao_code in __airport_locations__:
-            return normalized_icao_code
-
-    if len(normalized_icao_code) <= 3:
-        normalized_icao_code = "K{}".format(normalized_icao_code)
-
-        if normalized_icao_code in __airport_locations__:
-            return normalized_icao_code
-
-    return None
-
-# TODO: convert to https://api.checkwx.com/station/KDWH/suntimes
-def get_civil_twilight(
-    station_icao_code: str,
-    current_utc_time: datetime = datetime.utcnow().replace(tzinfo=timezone.utc),
-    use_cache: bool = True
-) -> list:
-    """
-    Gets the civil twilight time for the given airport
-
-    Arguments:
-        airport_icao_code {string} -- The ICAO code of the airport.
-
-    Returns:
-        An array that describes the following:
-        0 - When sunrise starts
-        1 - when sunrise is
-        2 - when full light starts
-        3 - when full light ends
-        4 - when sunset starts
-        5 - when it is full dark
-    """
-
-    is_cache_valid, cached_value = __is_cache_valid__(
-        station_icao_code,
-        __daylight_cache__,
-        4 * 60)
-
-    # Make sure that the sunrise time we are using is still valid...
-    if is_cache_valid:
-        hours_since_sunrise = (
-            current_utc_time - cached_value[1]).total_seconds() / 3600
-        if hours_since_sunrise > 24:
-            is_cache_valid = False
-            safe_log_warning(
-                "Twilight cache for {} had a HARD miss with delta={}".format(
-                    station_icao_code,
-                    hours_since_sunrise))
-            current_utc_time += timedelta(hours=1)
-
-    if is_cache_valid and use_cache:
-        return cached_value
-
-    faa_code = get_faa_csv_identifier(station_icao_code)
-
-    if faa_code is None:
-        return None
-
-    # Using "formatted=0" returns the times in a full datetime format
-    # Otherwise you need to do some silly math to figure out the date
-    # of the sunrise or sunset.
-    url = "http://api.sunrise-sunset.org/json?lat=" + \
-        str(__airport_locations__[faa_code]["lat"]) + \
-        "&lng=" + str(__airport_locations__[faa_code]["long"]) + \
-        "&date=" + str(current_utc_time.year) + "-" + str(current_utc_time.month) + "-" + str(current_utc_time.day) + \
-        "&formatted=0"
-
-    json_result = []
-    try:
-        json_result = __rest_session__.get(
-            url, timeout=DEFAULT_READ_SECONDS).json()
-    except Exception as ex:
-        safe_log_warning(
-            '~get_civil_twilight() => None; EX:{}'.format(ex))
-        return []
-
-    if json_result is not None and "status" in json_result and json_result["status"] == "OK" and "results" in json_result:
-        sunrise = __get_utc_datetime__(json_result["results"]["sunrise"])
-        sunset = __get_utc_datetime__(json_result["results"]["sunset"])
-        sunrise_start = __get_utc_datetime__(
-            json_result["results"]["civil_twilight_begin"])
-        sunset_end = __get_utc_datetime__(
-            json_result["results"]["civil_twilight_end"])
-        sunrise_length = sunrise - sunrise_start
-        sunset_length = sunset_end - sunset
-        avg_transition_time = timedelta(
-            seconds=(sunrise_length.seconds + sunset_length.seconds) / 2)
-        sunrise_and_sunset = [
-            sunrise_start,
-            sunrise,
-            sunrise + avg_transition_time,
-            sunset - avg_transition_time,
-            sunset,
-            sunset_end]
-        __set_cache__(
-            station_icao_code,
-            __daylight_cache__,
-            sunrise_and_sunset)
-
-        return sunrise_and_sunset
-
-    return None
-
-
 def is_daylight(
     station_icao_code: str,
-    light_times: list,
     current_utc_time: datetime = datetime.utcnow().replace(tzinfo=timezone.utc),
     use_cache: bool = True
 ) -> bool:
@@ -317,26 +213,28 @@ def is_daylight(
         boolean -- True if the airport is currently in daylight.
     """
 
-    if light_times is not None and len(light_times) == 6:
-        # Deal with day old data...
-        hours_since_sunrise = (
-            current_utc_time - light_times[1]).total_seconds() / 3600
+    si = __station_info__[station_icao_code]
+    # Deal with day old data...
+    hours_since_sunrise = (
+        current_utc_time - si['sunrise']).total_seconds() / 3600
 
-        if hours_since_sunrise < 0:
-            light_times = get_civil_twilight(
-                station_icao_code,
-                current_utc_time - timedelta(hours=24),
-                use_cache)
+    if hours_since_sunrise < 0:
+        x=''
+        # how to refetch for this airport
+        # light_times = get_civil_twilight(
+        #     station_icao_code,
+        #     current_utc_time - timedelta(hours=24),
+        #     use_cache)
 
-        if hours_since_sunrise > 24:
-            return True
+    if hours_since_sunrise > 24:
+        return True
 
-        # Make sure the time between takes into account
-        # The amount of time sunrise or sunset takes
-        is_after_sunrise = light_times[2] < current_utc_time
-        is_before_sunset = current_utc_time < light_times[3]
+    # Make sure the time between takes into account
+    # The amount of time sunrise or sunset takes
+    is_after_sunrise = si['full_light_start'] < current_utc_time
+    is_before_sunset = current_utc_time < si['full_light_end']
 
-        return is_after_sunrise and is_before_sunset
+    return is_after_sunrise and is_before_sunset
 
     return True
 
@@ -482,61 +380,6 @@ def get_twilight_transition(
     return proportion_off_to_night, proportion_night_to_color
 
 
-# TODO: NOT NEEDED
-def extract_metar_from_html_line(
-    raw_metar_line
-):
-    """
-    Takes a raw line of HTML from the METAR report and extracts the METAR from it.
-    NOTE: A "$" at the end of the line indicates a "maintenance check" and is part of the report.
-
-    Arguments:
-        metar {string} -- The raw HTML line that may include BReaks and other HTML elements.
-
-    Returns:
-        string -- The extracted METAR.
-    """
-
-    metar = re.sub('<[^<]+?>', '', raw_metar_line)
-    metar = metar.replace('\n', '')
-    metar = metar.strip()
-
-    return metar
-
-# TODO: convert cache
-def get_metar_from_report_line(
-    metar_report_line_from_webpage
-):
-    """
-    Extracts the METAR from the line in the webpage and sets
-    the data into the cache.
-
-    Returns None if an error occurs or nothing can be found.
-
-    Arguments:
-        metar_report_line_from_webpage {string} -- The line that contains the METAR from the web report.
-
-    Returns:
-        string,string -- The identifier and extracted METAR (if any), or None
-    """
-
-    identifier = None
-    metar = None
-
-    try:
-        metar = extract_metar_from_html_line(metar_report_line_from_webpage)
-
-        if len(metar) < 1:
-            return (None, None)
-
-        identifier = metar.split(' ')[0]
-        __set_cache__(identifier, __metar_report_cache__, metar)
-    except Exception:
-        metar = None
-
-    return (identifier, metar)
-
-
 def __is_station_ok_to_call__(
     icao_code: str
 ) -> bool:
@@ -592,33 +435,30 @@ def get_metars(
 
         is_ready_to_call = __is_station_ok_to_call__(identifier)
 
+        # DLQ debug
+        # pprint("sta: {}, cache_valid: {}, report: {}, ready? {}".format(identifier, cache_valid, report, is_ready_to_call))
+
         if cache_valid and report is not None and not is_ready_to_call:
             # Falling back to cached METAR for rate limiting
-            metars[identifier] = report
+            metars[identifier] = __metar_report_cache__[identifier][1]
+            safe_log("Return Cached WX for {}={}".format(identifier, metars[identifier]['raw_text']))
         # Fall back to an "INVALID" if everything else failed.
         else:
             try:
-                new_metars = fetch_metars([identifier])
-                new_report = new_metars[identifier]
-
+                new_metar = fetch_metars([identifier])  # this caches it too
+                new_report = new_metar[identifier]
                 safe_log("New WX for {}={}".format(identifier, new_report['raw_text']))
 
                 if new_report is None or len(new_report) < 1:
                     continue
 
-                __set_cache__(
-                    identifier,
-                    __metar_report_cache__,
-                    new_report)
                 metars[identifier] = new_report
-
                 safe_log('{}:{}'.format(identifier, new_report['raw_text']))
 
             except Exception as e:
                 safe_log_warning(
                     'get_metars, being set to INVALID EX:{}'.format(e))
                 metars[identifier] = INVALID
-
     return metars
 
 
@@ -637,27 +477,32 @@ def fetch_metars(
 
     metars = {}
 
-    airport_list = ",".join(airport_icao_codes)
-    req = requests.get("https://api.checkwx.com/metar/{}/decoded".format(airport_list), headers=hdr)
-    try:
-        req.raise_for_status()
-        resp = json.loads(req.text)
+    # checkwx allows up to 20 requests on a single call
+    for i in range(0, len(airport_icao_codes), 20):
+        partial_list = ",".join(airport_icao_codes[i:i + 20])
+        print("fetching metars: get batch of {}. {}".format(len(airport_icao_codes[i:i + 20]), partial_list))
+        req = requests.get("{}/metar/{}/decoded".format(api_service_base, partial_list), headers=hdr)
+        try:
+            req.raise_for_status()
+            resp = json.loads(req.text)
+        except requests.exceptions.HTTPError as e:
+            print(e)
 
-    except requests.exceptions.HTTPError as e:
-        print(e)
-
-    for airport in resp['data']:
-        icao = airport['icao']
-        metars[icao] = airport
-
-        __station_last_called__[icao] = datetime.utcnow()
+        for airport in resp['data']:
+            icao = airport['icao']
+            metars[icao] = airport
+            __station_last_called__[icao] = datetime.utcnow()
+            __set_cache__(icao, __metar_report_cache__, airport)
 
     return metars
 
 
+# Initial load
+fetch_metars(list(airports_config.keys()))
+
+
 def get_metar(
     airport_icao_code: str,
-    metar: dict,
     use_cache: bool = True
 ) -> str:
     """
@@ -686,13 +531,13 @@ def get_metar(
             return cached_metar
 
     try:
+        # get a new metar (non-cached)
         metars = get_metars([airport_icao_code])
 
         if metars is None:
             safe_log(
                 'Get a None while attempting to get METAR for {}'.format(
                     airport_icao_code))
-
             return None
 
         if airport_icao_code not in metars:
@@ -709,9 +554,6 @@ def get_metar(
         safe_log("")
 
         return None
-
-
-
 
 
 def get_metar_age(
@@ -774,26 +616,26 @@ def get_visibility(
     return metar['visibility']['miles']
 
 
-# TODO: metar.ceiling.base_feet_agl
-def get_ceiling(
-    metar: dict
-):
-    """
-    Returns the flight rules classification based on ceiling from a RAW metar.
-
-    Arguments:
-        metar {string} -- The RAW weather report in METAR format.
-
-    Returns:
-        string -- The ceiling, or INVALID in case of an error.
-    """
-
-    return metar['ceiling']['feet']
+# # TODO: metar.ceiling.base_feet_agl
+# def get_ceiling(
+#     metar: dict
+# ):
+#     """
+#     Returns the flight rules classification based on ceiling from a RAW metar.
+#
+#     Arguments:
+#         metar {string} -- The RAW weather report in METAR format.
+#
+#     Returns:
+#         string -- The ceiling, or INVALID in case of an error.
+#     """
+#
+#     return metar['ceiling']['feet']
 
 
 # TODO: metar.temperature.celsius
 def get_temperature(
-    metar: str
+    station: str
 ) -> int:
     """
     Returns the temperature (celsius) from the given metar string.
@@ -804,10 +646,10 @@ def get_temperature(
     Returns:
         int: The temperature in celsius.
     """
-    if metar is None:
+    if __metar_report_cache__[station] is None:
         return None
 
-    return metar['temperature']['celsius']
+    return __metar_report_cache__[station][1]['temperature']['celsius']
 
 
 # TODO: metar.barometer.hg
@@ -907,26 +749,29 @@ def get_category(
 if __name__ == '__main__':
     print('Starting self-test')
 
-    airports = ['KDWH', 'KIAH', 'KMSY', 'KDOESNTEXIST']
-    # airports = airports_config.keys()
+    # airports = ['KHOU', 'KIAH', 'KEFD', 'KDWH', 'NOTAGOODCODE']
+    airports = list(airports_config.keys())
 
     starting_date_time = datetime.utcnow()
     utc_offset = starting_date_time - datetime.now()
 
     metars = get_metars(airports)
-    print("there are {} metars.".format(len(metars)))
-    print("flight category for KDWH: {}".format(get_category(metars['KDWH'])))
+    pprint(get_metar("KIAH", False))
+    print("total number of metars: {}".format(len(metars)))
 
-    print("metar age for KDWH: {}".format(get_metar_age(metars['KDWH'])))
-    print(get_metar('KDWH', metars, use_cache=False))
+    print("flight category for KIAH: {}".format(get_category(metars['KIAH'])))
+    print("metar age for KIAH: {}  current: {}   metar_date: {}".format(get_metar_age(metars['KIAH']), datetime.utcnow(), metars['KIAH']['observed']))
+    # print(get_metar('KIAH', metars, use_cache=False))
+    # print("Temp: {}C".format(get_temperature('KIAH')))
 
-    # light_times = get_civil_twilight('KDWH', starting_date_time)
-    # print('Sunrise start:{0}'.format(light_times[0] - utc_offset))
-    # print('Sunrise:{0}'.format(light_times[1] - utc_offset))
-    # print('Full light:{0}'.format(light_times[2] - utc_offset))
-    # print('Sunset start:{0}'.format(light_times[3] - utc_offset))
-    # print('Sunset:{0}'.format(light_times[4] - utc_offset))
-    # print('Full dark:{0}'.format(light_times[5] - utc_offset))
+    # si = __station_info__['KIAH']
+    # pprint(si, indent=4)
+    # print('Sunrise start/dawn:{0}'.format(si['dawn'] - utc_offset))
+    # print('Sunrise:{0}'.format(si['sunrise'] - utc_offset))
+    # print('Full light:{0}'.format(si['full_light_start'] - utc_offset))
+    # print('Sunset start:{0}'.format(si['full_light_end'] - utc_offset))
+    # print('Sunset:{0}'.format(si['sunset'] - utc_offset))
+    # print('Full dark/dusk:{0}'.format(si['dusk'] - utc_offset))
 
     # for id in airports:
     #     metar = get_metar(id)
@@ -934,25 +779,23 @@ if __name__ == '__main__':
     #     flight_category = get_category(metars[id])
     #     print('{}: {}'.format(id, flight_category))
 
-    sys.exit()
+    # for hours_ahead in range(0, 240):
+    #     hours_ahead *= 0.1
+    #     time_to_fetch = starting_date_time + timedelta(hours=hours_ahead)
+    #     local_fetch_time = time_to_fetch - utc_offset
 
-    for hours_ahead in range(0, 240):
-        hours_ahead *= 0.1
-        time_to_fetch = starting_date_time + timedelta(hours=hours_ahead)
-        local_fetch_time = time_to_fetch - utc_offset
+        # for airport in ['KDWH', 'KIAH']:
+        #     is_lit = is_daylight(airport, time_to_fetch)
+        #     print("{} is lit? {}".format(airport, is_lit))
+        #     # is_dark = is_night(airport, time_to_fetch)
+            # transition = get_twilight_transition(airport, time_to_fetch)
 
-        for airport in ['KDWH', 'KMSY']:  # , 'KCOE', 'KMSP', 'KOSH']:
-            light_times = get_civil_twilight(airport, time_to_fetch)
-            is_lit = is_daylight(airport, light_times, time_to_fetch)
-            is_dark = is_night(airport, light_times, time_to_fetch)
-            transition = get_twilight_transition(airport, time_to_fetch)
-
-            print(
-                "DELTA=+{0:.1f}, LOCAL={1}, AIRPORT={2}: is_day={3}, is_night={4}, p_dark:{5:.1f}, p_color:{6:.1f}".format(
-                    hours_ahead,
-                    local_fetch_time,
-                    airport,
-                    is_lit,
-                    is_dark,
-                    transition[0],
-                    transition[1]))
+            # print(
+            #     "DELTA=+{0:.1f}, LOCAL={1}, AIRPORT={2}: is_day={3}, is_night={4}, p_dark:{5:.1f}, p_color:{6:.1f}".format(
+            #         hours_ahead,
+            #         local_fetch_time,
+            #         airport,
+            #         is_lit,
+            #         is_dark,
+            #         transition[0],
+            #         transition[1]))

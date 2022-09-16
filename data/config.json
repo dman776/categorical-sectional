@@ -15,5 +15,6 @@
   "visualizer": 0,
   "on_time": "",
   "off_time": "",
-  "checkwx_api_key": "2b9322790d7741c6a35515cc84"
+  "api_key": "2b9322790d7741c6a35515cc84",
+  "api_service_base": "https://api.checkwx.com"
 }
