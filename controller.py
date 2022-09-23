@@ -203,6 +203,7 @@ def render_thread():
 
             toc = time.perf_counter()
         except KeyboardInterrupt:
+            renderer.clear()
             quit()
         except Exception as ex:
             safe_logging.safe_log(ex)

@@ -9,7 +9,6 @@ from visualizers.visualizer import BlinkingVisualizer, rgb_colors
 
 def get_airport_category(
     airport: str,
-    metar: str
 ) -> str:
     """
     Gets the category of a single airport.
@@ -25,13 +24,13 @@ def get_airport_category(
 
     try:
         try:
-            is_inop = weather.is_station_inoperative(metar)
+            is_inop = weather.is_station_inoperative(airport)
 
             category = weather.INOP if is_inop\
-                else weather.get_category(airport, metar)
+                else weather.get_category(airport)
         except Exception as e:
             safe_logging.safe_log_warning(
-                "Exception while attempting to categorize METAR:{} EX:{}".format(metar, e))
+                "Exception while attempting to categorize METAR:{} EX:{}".format(airport, e))
     except Exception as e:
         safe_logging.safe_log(
             "Captured EX while attempting to get category for {} EX:{}".format(airport, e))
@@ -71,13 +70,13 @@ def get_color_from_condition(
 
 
 def should_station_flash(
-    metar: str
+    airport: str
 ) -> bool:
     is_old = False
     metar_age = None
 
     if metar is not None and metar != weather.INVALID:
-        metar_age = weather.get_metar_age(metar)
+        metar_age = weather.get_metar_age(airport)
 
     if metar_age is not None:
         metar_age_minutes = metar_age.total_seconds() / 60.0
@@ -114,8 +113,8 @@ def get_airport_condition(
 
     try:
         metar = weather.get_metar(airport)
-        category = get_airport_category(airport, metar)
-        should_flash = should_station_flash(metar)
+        category = get_airport_category(airport)
+        should_flash = should_station_flash(airport)
 
         return category, should_flash
     except Exception as ex:
@@ -161,7 +160,7 @@ class FlightRulesVisualizer(BlinkingVisualizer):
 
         if is_blink:
             metar = weather.get_metar(station)
-            is_lightning = weather.is_lightning(metar)
+            is_lightning = weather.is_lightning(station)
 
             if is_lightning:
                 color_by_category = rgb_colors[colors_lib.YELLOW]
