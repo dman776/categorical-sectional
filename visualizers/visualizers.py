@@ -22,6 +22,7 @@ class VisualizerManager(object):
             weather.TemperatureVisualizer(renderer, stations),
             weather.PrecipitationVisualizer(renderer, stations),
             weather.PressureVisualizer(renderer, stations),
+            weather.WindVisualizer(renderer, stations),
             rainbow.RainbowVisualizer(renderer, stations),
             rainbow.LightCycleVisualizer(renderer, stations)
         ]

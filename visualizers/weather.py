@@ -289,6 +289,64 @@ def get_color_by_pressure(
             STANDARD_PRESSURE))
 
 
+def get_color_by_wind(
+    wind_speed: int
+) -> list:
+    """
+    Given a windspeed reading, return a RGB color to show on the map.
+
+    Args:
+        wind_speed (int): The windspeed reading from a metar in KTS.
+
+    Returns:
+        list: The RGB color to show on the map for the station.
+    """
+
+    colors_by_name = colors_lib.get_colors()
+
+    if wind_speed is None:
+        return colors_by_name[colors_lib.LIGHT_GRAY]
+
+    if wind_speed < 5:
+        return colors_lib.get_color_mix(
+            colors_by_name[colors_lib.GRAY],
+            colors_by_name[colors_lib.BLUE],
+            get_proportion_between_floats(
+                0,
+                wind_speed,
+                5))
+
+    if wind_speed < 10:
+        return colors_lib.get_color_mix(
+            colors_by_name[colors_lib.BLUE],
+            colors_by_name[colors_lib.GREEN],
+            get_proportion_between_floats(
+                5,
+                wind_speed,
+                10))
+
+    if wind_speed < 15:
+        return colors_lib.get_color_mix(
+            colors_by_name[colors_lib.GREEN],
+            colors_by_name[colors_lib.YELLOW],
+            get_proportion_between_floats(
+                10,
+                wind_speed,
+                15))
+
+    if wind_speed < 20:
+        return colors_lib.get_color_mix(
+            colors_by_name[colors_lib.YELLOW],
+            colors_by_name[colors_lib.RED],
+            get_proportion_between_floats(
+                20,
+                wind_speed,
+                25))
+
+    if wind_speed > 25:
+        return colors_lib.RED, True
+
+
 class TemperatureVisualizer(BlinkingVisualizer):
     def __init__(
         self,
@@ -393,6 +451,44 @@ class PressureVisualizer(BlinkingVisualizer):
         metar = weather.get_metar(station)
         pressure = weather.get_pressure(metar)
         color_to_render = get_color_by_pressure(pressure)
+        final_color = colors_lib.get_brightness_adjusted_color(
+            color_to_render,
+            configuration.get_brightness_proportion())
+
+        self.__renderer__.set_leds(
+            self.__stations__[station],
+            final_color)
+
+
+class WindVisualizer(BlinkingVisualizer):
+    """
+    Visualizer for wind. High wind is represented
+    by RED while low pressure is represented by BLUE.
+    """
+
+    def __init__(
+        self,
+        renderer: Renderer,
+        stations: dict
+    ):
+        super().__init__(renderer, stations)
+
+    def render_station(
+        self,
+        station: str,
+        is_blink: bool = False
+    ):
+        """
+        Renders a station based on the wind.
+
+        Arguments:
+            station {string} -- The identifier of the station.
+        """
+
+        metar = weather.get_metar(station)
+        wind = weather.get_wind(metar)
+        color_to_render = get_color_by_wind(wind)
+        safe_log("metar= {} wind={} color={}".format(metar, wind, color_to_render))
         final_color = colors_lib.get_brightness_adjusted_color(
             color_to_render,
             configuration.get_brightness_proportion())

@@ -14,6 +14,9 @@ from configuration import configuration
 from lib.colors import clamp
 from lib.safe_logging import safe_log, safe_log_warning
 
+import sys
+from pprint import pprint
+
 INVALID = 'INVALID'
 INOP = 'INOP'
 VFR = 'VFR'
@@ -988,6 +991,30 @@ def get_pressure(
     return None
 
 
+def get_wind(
+    metar: str
+) -> int:
+    """
+    Get the windspeed from a METAR.
+
+    Args:
+        metar (str): The metar to extract the pressure from.
+
+    Returns:
+        int: None if not found, otherwise the wind speed. EX: 12
+    """
+    components = get_main_metar_components(metar)
+
+    try:
+        windc = components[2]
+        wind_speed = windc[3:5]     # 36010KT
+        return wind_speed
+    except Exception:
+        pass
+
+    return None
+
+
 def get_precipitation(
     metar: str
 ) -> bool:
@@ -1104,6 +1131,10 @@ def get_category(
 
 if __name__ == '__main__':
     print('Starting self-test')
+    # metar = "KDWH 292153Z 36006KT 10SM CLR 30/09 A3007 RMK AO2 SLP179 T03000089"
+    # pprint(get_main_metar_components(metar))
+    # pprint(get_wind(metar))
+    # sys.exit()
 
     airports_to_test = ['KW29', 'KMSN', 'KAWO', 'KOSH', 'KBVS', 'KDOESNTEXIST']
     starting_date_time = datetime.utcnow()
