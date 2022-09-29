@@ -82,48 +82,48 @@ def get_color_by_temperature_celsius(
     if temperature_fahrenheit < 0:
         return colors_by_name[colors_lib.PURPLE]
 
-    if temperature_fahrenheit < 20:
+    if temperature_fahrenheit < 50:
         return colors_lib.get_color_mix(
             colors_by_name[colors_lib.PURPLE],
             colors_by_name[colors_lib.BLUE],
             get_proportion_between_floats(
                 0,
                 temperature_fahrenheit,
-                20))
+                50))
 
-    if temperature_fahrenheit < 40:
+    if temperature_fahrenheit < 70:
         return colors_lib.get_color_mix(
             colors_by_name[colors_lib.BLUE],
             colors_by_name[colors_lib.GREEN],
             get_proportion_between_floats(
-                20,
+                50,
                 temperature_fahrenheit,
-                40))
+                70))
 
-    if temperature_fahrenheit < 60:
+    if temperature_fahrenheit < 80:
         return colors_lib.get_color_mix(
             colors_by_name[colors_lib.GREEN],
             colors_by_name[colors_lib.YELLOW],
             get_proportion_between_floats(
-                40,
+                70,
                 temperature_fahrenheit,
-                60))
+                80))
 
-    if temperature_fahrenheit < 80:
+    if temperature_fahrenheit < 90:
         return colors_lib.get_color_mix(
             colors_by_name[colors_lib.YELLOW],
             colors_by_name[colors_lib.ORANGE],
             get_proportion_between_floats(
-                60,
+                80,
                 temperature_fahrenheit,
-                80))
+                90))
 
     if temperature_fahrenheit < 100:
         return colors_lib.get_color_mix(
             colors_by_name[colors_lib.ORANGE],
             colors_by_name[colors_lib.RED],
             get_proportion_between_floats(
-                80,
+                90,
                 temperature_fahrenheit,
                 100))
 
