@@ -183,6 +183,7 @@ def render_thread():
                     display = False
 
             if display:
+                safe_logging.safe_log("Display is ON")
                 loaded_visualizers[visualizer_index].update(delta_time)
             else:
                 all_stations(colors_lib.OFF)

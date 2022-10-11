@@ -427,12 +427,12 @@ def get_metars(
 
         cache_valid, report = __is_cache_valid__(id, __metar_report_cache__)
         is_ready_to_call = __is_station_ok_to_call__(id)
-        print("get_metars: id={} cache_valid={} is_ready={}".format(id, cache_valid, is_ready_to_call))
+        # print("get_metars: id={} cache_valid={} is_ready={}".format(id, cache_valid, is_ready_to_call))
 
         if use_cache and cache_valid and report is not None and not is_ready_to_call:
             # Falling back to cached METAR for rate limiting
             metars[id] = __metar_report_cache__[id][1]
-            safe_log("Cached WX for {}={}".format(id, metars[id]['raw_text']))
+            # safe_log("Cached WX for {}={}".format(id, metars[id]['raw_text']))
         else:
             # this one needs to be fetched.  Add it to the list.
             ids_to_fetch.append(id)
