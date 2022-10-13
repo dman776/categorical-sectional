@@ -6,6 +6,7 @@ import lib.colors as colors_lib
 from configuration import configuration
 from data_sources import weather
 from renderers.debug import Renderer
+from lib import logger, safe_logging
 
 from visualizers.visualizer import BlinkingVisualizer
 
@@ -304,8 +305,10 @@ def get_color_by_wind(
 
     colors_by_name = colors_lib.get_colors()
 
-    if wind_speed is None:
-        return colors_by_name[colors_lib.LIGHT_GRAY]
+    # safe_logging.safe_log("get_color_by_wind(): {}".format(wind_speed))
+
+    if wind_speed is None or wind_speed == 0:
+        return colors_by_name[colors_lib.GRAY]
 
     if wind_speed < 5:
         return colors_lib.get_color_mix(
@@ -343,7 +346,7 @@ def get_color_by_wind(
                 wind_speed,
                 25))
 
-    if wind_speed > 25:
+    if wind_speed >= 20:
         return colors_lib.RED, True
 
 
@@ -484,15 +487,19 @@ class WindVisualizer(BlinkingVisualizer):
         Arguments:
             station {string} -- The identifier of the station.
         """
-
+        wind = 0
         metar = weather.get_metar(station)
-        wind = weather.get_wind(metar)
+        if not metar == "INVALID":
+            wind = weather.get_wind(metar)
+        # safe_logging.safe_log("sta= {} wind={}".format(station, wind))
         color_to_render = get_color_by_wind(wind)
-        safe_log("metar= {} wind={} color={}".format(metar, wind, color_to_render))
-        final_color = colors_lib.get_brightness_adjusted_color(
-            color_to_render,
-            configuration.get_brightness_proportion())
+        # safe_logging.safe_log("sta= {} color_to_render={}".format(station, color_to_render))
+
+
+        # final_color = colors_lib.get_brightness_adjusted_color(
+        #     color_to_render,
+        #     configuration.get_brightness_proportion())
 
         self.__renderer__.set_leds(
             self.__stations__[station],
-            final_color)
+            color_to_render)

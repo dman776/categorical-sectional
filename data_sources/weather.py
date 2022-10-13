@@ -1004,12 +1004,22 @@ def get_wind(
         int: None if not found, otherwise the wind speed. EX: 12
     """
     components = get_main_metar_components(metar)
+    wind_speed = 0
 
     try:
-        windc = components[2]
-        wind_speed = windc[3:5]     # 36010KT
+        windc = ""
+        if components[1] == "AUTO":
+            windc = components[2]
+        else:
+            windc = components[1]
+
+        if windc[-2:] == "KT":
+            wind_speed = windc[3:5]     # 36010KT
+        else:
+            wind_speed = 0      # no reported wind
+        # safe_log("get_wind: metar= {} windc={} windc[-2:]={} wind_speed= {}".format(metar, windc, windc[-2:], wind_speed))
         return wind_speed
-    except Exception:
+    except Exception as e:
         pass
 
     return None
