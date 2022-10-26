@@ -1146,7 +1146,7 @@ if __name__ == '__main__':
     # pprint(get_wind(metar))
     # sys.exit()
 
-    airports_to_test = ['KW29', 'KMSN', 'KAWO', 'KOSH', 'KBVS', 'KDOESNTEXIST']
+    airports_to_test = ['KDWH', 'KIAH', 'KHOU', 'KCXO', 'KBVS', 'KDOESNTEXIST']
     starting_date_time = datetime.utcnow()
     utc_offset = starting_date_time - datetime.now()
 
@@ -1173,24 +1173,26 @@ if __name__ == '__main__':
         age = get_metar_age(metar)
         flight_category = get_category(identifier, metar)
         print('{}: {}: {}'.format(identifier, flight_category, metar))
+        print('{}: {}: {}'.format(identifier, get_wind(metar), metar))
 
-    for hours_ahead in range(0, 240):
-        hours_ahead *= 0.1
-        time_to_fetch = starting_date_time + timedelta(hours=hours_ahead)
-        local_fetch_time = time_to_fetch - utc_offset
 
-        for airport in ['KW29', 'KAWO']:  # , 'KCOE', 'KMSP', 'KOSH']:
-            light_times = get_civil_twilight(airport, time_to_fetch)
-            is_lit = is_daylight(airport, light_times, time_to_fetch)
-            is_dark = is_night(airport, light_times, time_to_fetch)
-            transition = get_twilight_transition(airport, time_to_fetch)
-
-            print(
-                "DELTA=+{0:.1f}, LOCAL={1}, AIRPORT={2}: is_day={3}, is_night={4}, p_dark:{5:.1f}, p_color:{6:.1f}".format(
-                    hours_ahead,
-                    local_fetch_time,
-                    airport,
-                    is_lit,
-                    is_dark,
-                    transition[0],
-                    transition[1]))
+    # for hours_ahead in range(0, 240):
+    #     hours_ahead *= 0.1
+    #     time_to_fetch = starting_date_time + timedelta(hours=hours_ahead)
+    #     local_fetch_time = time_to_fetch - utc_offset
+    #
+    #     for airport in ['KDWH', 'KAWO']:  # , 'KCOE', 'KMSP', 'KOSH']:
+    #         light_times = get_civil_twilight(airport, time_to_fetch)
+    #         is_lit = is_daylight(airport, light_times, time_to_fetch)
+    #         is_dark = is_night(airport, light_times, time_to_fetch)
+    #         transition = get_twilight_transition(airport, time_to_fetch)
+    #
+    #         print(
+    #             "DELTA=+{0:.1f}, LOCAL={1}, AIRPORT={2}: is_day={3}, is_night={4}, p_dark:{5:.1f}, p_color:{6:.1f}".format(
+    #                 hours_ahead,
+    #                 local_fetch_time,
+    #                 airport,
+    #                 is_lit,
+    #                 is_dark,
+    #                 transition[0],
+    #                 transition[1]))

@@ -290,6 +290,7 @@ def get_color_by_pressure(
             STANDARD_PRESSURE))
 
 
+
 def get_color_by_wind(
     wind_speed: int
 ) -> list:
